@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>小役カウンター Pro - カチカチくん</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* スマホでの連打によるダブルタップズームや選択を防止 */
+        * {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* 入力フォームのみ選択・入力を許可 */
+        input, select, textarea {
+            user-select: auto;
+            -webkit-user-select: auto;
+        }
+        /* 数字入力のスピンボタンを非表示 */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        /* カウントボタン押下時のアニメーション */
+        .btn-press {
+            transition: transform 0.06s cubic-bezier(0.4, 0, 0.2, 1), filter 0.06s ease;
+        }
+        .btn-press:active {
+            transform: scale(0.95);
+            filter: brightness(1.15);
+        }
+        /* カウント数値のポップアニメーション */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.18); }
+            100% { transform: scale(1); }
+        }
+        .animate-pop {
+            animation: pop 0.14s ease-out;
+        }
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans pb-16 antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- トップナビ・ヘッダー -->
+    <header class="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 px-3 py-2.5 shadow-lg">
+        <div class="max-w-md mx-auto flex items-center justify-between gap-2">
+            <!-- ロゴ・タイトル -->
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
+                    <i class="fa-solid fa-sliders text-white text-sm"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-1.5">
+                        <h1 class="text-sm font-extrabold tracking-tight text-zinc-100 leading-none">小役カウンター</h1>
+                        <span id="autoSaveBadge" class="inline-flex items-center gap-1 text-[9px] font-bold bg-emerald-950/90 text-emerald-400 border border-emerald-800/60 px-1.5 py-0.5 rounded-full">
+                            <i class="fa-solid fa-cloud-arrow-up text-[8px]"></i>自動保存済
+                        </span>
+                    </div>
+                    <span class="text-[10px] text-zinc-400 font-medium">カチカチくん Web Pro</span>
+                </div>
+            </div>
+
+            <!-- アクションボタン群（コピー＆リセット） -->
+            <div class="flex items-center gap-1.5">
+                <button onclick="copyResultsToClipboard()" title="結果をコピー" class="btn-press bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/80 rounded-lg px-2.5 py-2 text-xs font-semibold flex items-center gap-1 shadow-sm">
+                    <i class="fa-regular fa-copy text-indigo-400"></i>
+                    <span>結果コピー</span>
+                </button>
+                <button onclick="openResetModal()" title="リセット" class="btn-press bg-zinc-900 hover:bg-red-950/60 text-red-400 border border-red-900/50 rounded-lg px-2.5 py-2 text-xs font-semibold flex items-center gap-1 shadow-sm">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span class="hidden sm:inline">リセット</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ（スマホ縦画面最適化の最大幅） -->
+    <main class="max-w-md mx-auto px-3 pt-3 space-y-3.5">
+
+        <!-- 0. プリセット＆マイプリセット管理バー -->
+        <section class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3 shadow-xl space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-bookmark text-indigo-400 text-xs"></i>
+                    <h2 class="text-xs font-bold text-zinc-200">機種プリセット / マイ保存構成</h2>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="openPresetManageModal()" class="btn-press bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg px-2 py-1 text-[11px] font-semibold flex items-center gap-1">
+                        <i class="fa-solid fa-list-check text-zinc-400 text-[10px]"></i>
+                        <span>管理</span>
+                        <span id="customPresetCountBadge" class="bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-1.5 rounded-full text-[10px] font-mono">0</span>
+                    </button>
+                    <button onclick="openSavePresetModal()" class="btn-press bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-2.5 py-1 text-[11px] font-bold flex items-center gap-1 shadow-md shadow-indigo-600/20">
+                        <i class="fa-solid fa-floppy-disk text-[10px]"></i>
+                        <span>＋ 現在の項目構成を保存</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- クイック切替チップ一覧（標準プリセット＋保存済みマイプリセット） -->
+            <div id="presetChipsContainer" class="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
+                <!-- JavaScriptでプリセットチップを描画 -->
+            </div>
+        </section>
+
+        <!-- 1. ゲーム数管理パネル -->
+        <section class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 shadow-xl">
+            <div class="grid grid-cols-12 gap-2.5 items-center">
+                <!-- 打ち始め & 現在ゲーム数入力 -->
+                <div class="col-span-7 space-y-2">
+                    <!-- 打ち始めG -->
+                    <div class="flex items-center justify-between bg-zinc-950/90 border border-zinc-800/90 rounded-xl px-3 py-1.5 focus-within:border-indigo-500/80 transition-colors">
+                        <label for="startGames" class="text-[11px] font-bold text-zinc-400 whitespace-nowrap">打ち始め</label>
+                        <div class="flex items-center gap-1">
+                            <input type="number" id="startGames" inputmode="numeric" min="0" max="99999" value="0"
+                                oninput="handleGameInput()" onfocus="this.select()"
+                                class="w-20 bg-transparent text-right font-mono text-base font-bold text-zinc-200 focus:outline-none">
+                            <span class="text-[11px] text-zinc-500 font-semibold">G</span>
+                        </div>
+                    </div>
+
+                    <!-- 現在G -->
+                    <div class="flex items-center justify-between bg-zinc-950/90 border border-indigo-500/40 rounded-xl px-3 py-1.5 focus-within:border-indigo-400 transition-colors">
+                        <label for="currentGames" class="text-[11px] font-bold text-indigo-300 whitespace-nowrap">現在G数</label>
+                        <div class="flex items-center gap-1">
+                            <input type="number" id="currentGames" inputmode="numeric" min="0" max="99999" value="0"
+                                oninput="handleGameInput()" onfocus="this.select()"
+                                class="w-20 bg-transparent text-right font-mono text-lg font-extrabold text-white focus:outline-none">
+                            <span class="text-[11px] text-indigo-400 font-semibold">G</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 総消化ゲーム数（自動計算表示） -->
+                <div class="col-span-5 bg-gradient-to-b from-indigo-950/60 to-zinc-950 border border-indigo-500/30 rounded-xl p-2.5 flex flex-col items-center justify-center h-full min-h-[84px] relative overflow-hidden">
+                    <div class="text-[11px] font-bold text-indigo-300/90 tracking-wider mb-0.5 flex items-center gap-1">
+                        <i class="fa-solid fa-bolt text-[10px] text-amber-400"></i>
+                        <span>総消化G数</span>
+                    </div>
+                    <div class="flex items-baseline gap-0.5">
+                        <span id="totalGamesDisplay" class="font-mono text-2xl sm:text-3xl font-extrabold text-white tracking-tight">0</span>
+                        <span class="text-xs font-bold text-indigo-300">G</span>
+                    </div>
+                    <div id="gameErrorHint" class="hidden text-[10px] text-rose-400 font-semibold mt-0.5">
+                        ※現在Gが不足
+                    </div>
+                </div>
+            </div>
+
+            <!-- ゲーム数クイック加算・減算補助ボタン -->
+            <div class="mt-2.5 pt-2.5 border-t border-zinc-800/80 flex items-center justify-between gap-1.5">
+                <span class="text-[10px] font-bold text-zinc-400 shrink-0 mr-0.5">現在G調整:</span>
+                <div class="grid grid-cols-5 gap-1.5 w-full">
+                    <button onclick="adjustCurrentGames(-10)" class="btn-press bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/70 rounded-lg py-1.5 text-xs font-mono font-bold">-10</button>
+                    <button onclick="adjustCurrentGames(1)" class="btn-press bg-zinc-800/90 hover:bg-zinc-700 text-indigo-300 border border-zinc-700/70 rounded-lg py-1.5 text-xs font-mono font-bold">+1</button>
+                    <button onclick="adjustCurrentGames(10)" class="btn-press bg-zinc-800/90 hover:bg-zinc-700 text-indigo-300 border border-zinc-700/70 rounded-lg py-1.5 text-xs font-mono font-bold">+10</button>
+                    <button onclick="adjustCurrentGames(50)" class="btn-press bg-zinc-800/90 hover:bg-zinc-700 text-indigo-300 border border-zinc-700/70 rounded-lg py-1.5 text-xs font-mono font-bold">+50</button>
+                    <button onclick="adjustCurrentGames(100)" class="btn-press bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border border-indigo-700/60 rounded-lg py-1.5 text-xs font-mono font-bold">+100</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. カウンターグリッド（2列×可変行）＆項目追加ボタン -->
+        <section aria-label="カウンターボタンエリア" class="space-y-2.5">
+            <div id="counterGrid" class="grid grid-cols-2 gap-2.5">
+                <!-- JavaScriptでカウンターカードを生成 -->
+            </div>
+
+            <!-- カウンター項目追加ボタン -->
+            <button onclick="openAddCounterModal()" class="btn-press w-full bg-zinc-900/90 hover:bg-zinc-800/90 text-indigo-300 hover:text-indigo-200 border-2 border-dashed border-zinc-700 hover:border-indigo-500/60 rounded-2xl py-3 px-4 flex items-center justify-center gap-2 text-xs font-extrabold shadow-md transition-colors">
+                <i class="fa-solid fa-circle-plus text-sm text-indigo-400"></i>
+                <span>＋ カウンター項目を追加</span>
+                <span id="counterCountBadge" class="ml-1 bg-zinc-800 text-zinc-400 text-[10px] font-mono px-2 py-0.5 rounded-full border border-zinc-700">6項目</span>
+            </button>
+        </section>
+
+        <!-- 3. 合算確率・カスタム合算エリア -->
+        <section class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3.5 shadow-xl space-y-2.5">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                    <i class="fa-solid fa-layer-group text-indigo-400"></i>
+                    <span>合算確率モニター（タップで対象切替）</span>
+                </h2>
+                <span class="text-[10px] text-zinc-500">自動計算</span>
+            </div>
+
+            <!-- 合算枠リスト -->
+            <div id="combinedContainer" class="space-y-2.5">
+                <!-- JavaScriptで合算モニター2枠を描画 -->
+            </div>
+        </section>
+
+        <!-- 使い方ショートガイド -->
+        <footer class="text-center pt-1 pb-4 text-[11px] text-zinc-500 space-y-1">
+            <p><i class="fa-solid fa-pen-to-square mr-1"></i>各カウンターの名前をタップすると名前や色を即座に変更・自動保存できます</p>
+            <p><i class="fa-solid fa-bookmark mr-1"></i>「＋ 現在の項目構成を保存」から機種ごとの専用カウンターを何個でも登録できます</p>
+        </footer>
+    </main>
+
+    <!-- マイプリセット保存モーダル -->
+    <div id="savePresetModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-xs w-full p-4 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk text-indigo-400"></i>
+                    <span>現在の項目構成を保存</span>
+                </h3>
+                <button onclick="closeSavePresetModal()" class="text-zinc-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label for="presetNameInput" class="block text-xs text-zinc-400 mb-1.5">プリセット名（機種名など）</label>
+                    <input type="text" id="presetNameInput" maxlength="24"
+                        class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white font-bold focus:outline-none focus:border-indigo-500"
+                        placeholder="例：マイジャグV用、東京喰種 判別用">
+                </div>
+                <div class="bg-zinc-950/90 border border-zinc-800 rounded-xl p-2.5 space-y-1">
+                    <div class="text-[10px] font-bold text-zinc-400">保存される内容：</div>
+                    <div id="savePresetPreviewText" class="text-[11px] text-indigo-300 font-medium leading-relaxed break-words"></div>
+                    <div class="text-[10px] text-zinc-500 pt-1">※各ボタンの名前・色・項目数・合算モニターの選択状態が保存されます。</div>
+                </div>
+                <!-- 既存のマイプリセット選択中は上書き保存も選択可能 -->
+                <div id="overwritePresetOption" class="hidden pt-1">
+                    <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer bg-zinc-950/70 border border-zinc-800 rounded-xl px-3 py-2">
+                        <input type="checkbox" id="overwritePresetCheckbox" class="rounded text-indigo-600 focus:ring-0">
+                        <span id="overwritePresetLabelText" class="truncate">現在選択中のプリセットを上書きする</span>
+                    </label>
+                </div>
+            </div>
+            <div class="flex gap-2 justify-end pt-1">
+                <button onclick="closeSavePresetModal()" class="btn-press flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2.5 rounded-xl text-xs">
+                    キャンセル
+                </button>
+                <button onclick="saveCurrentAsCustomPreset()" class="btn-press flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-indigo-600/30">
+                    マイプリセット保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- マイプリセット管理（一覧・名前変更・削除）モーダル -->
+    <div id="managePresetsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3.5 max-h-[85vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2.5 shrink-0">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-bookmark text-indigo-400"></i>
+                    <span>保存済みマイプリセット管理</span>
+                </h3>
+                <button onclick="closePresetManageModal()" class="text-zinc-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="customPresetsListContainer" class="space-y-2 overflow-y-auto pr-1 flex-1">
+                <!-- JavaScriptで保存済みマイプリセット一覧を生成 -->
+            </div>
+            <div class="pt-2 border-t border-zinc-800 flex justify-between items-center gap-2 shrink-0">
+                <button onclick="closePresetManageModal(); openSavePresetModal();" class="btn-press bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-bold py-2 px-3 rounded-xl text-xs flex items-center gap-1">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>現在の構成を新規保存</span>
+                </button>
+                <button onclick="closePresetManageModal()" class="btn-press bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2 px-4 rounded-xl text-xs">
+                    閉じる
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- プリセット切替時のカウント引き継ぎ確認モーダル -->
+    <div id="switchPresetModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-xs w-full p-4 shadow-2xl space-y-4">
+            <div class="flex items-center gap-2.5 text-indigo-400">
+                <div class="w-9 h-9 rounded-full bg-indigo-950 border border-indigo-800 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-shuffle text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-white">プリセットの切り替え</h3>
+                    <p id="switchPresetTargetName" class="text-[11px] text-indigo-300 font-bold truncate max-w-[190px]"></p>
+                </div>
+            </div>
+            <p class="text-xs text-zinc-300 leading-relaxed bg-zinc-950/80 p-3 rounded-xl border border-zinc-800">
+                現在カウント中のデータがあります。カウント数とゲーム数を維持したまま項目名だけ切り替えますか？それとも0にリセットしますか？
+            </p>
+            <div class="space-y-2">
+                <button onclick="confirmPresetSwitch(true)" class="btn-press w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-indigo-600/25">
+                    回数・G数を維持して項目だけ切替
+                </button>
+                <button onclick="confirmPresetSwitch(false)" class="btn-press w-full bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800/70 font-bold py-2.5 rounded-xl text-xs">
+                    回数・G数を0にリセットして切替
+                </button>
+                <button onclick="closeSwitchPresetModal()" class="btn-press w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2 rounded-xl text-xs">
+                    キャンセル
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ラベル名編集・項目追加モーダル -->
+    <div id="editLabelModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-xs w-full p-4 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <span id="modalColorDot" class="w-3 h-3 rounded-full inline-block"></span>
+                    <span id="editModalTitle">項目名の変更</span>
+                </h3>
+                <button onclick="closeEditLabelModal()" class="text-zinc-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label for="labelInputField" class="block text-xs text-zinc-400 mb-1.5">ラベル名を入力してください</label>
+                    <input type="text" id="labelInputField" maxlength="16"
+                        class="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white font-bold focus:outline-none focus:border-indigo-500"
+                        placeholder="例：ぶどう、共通ベル、CZなど">
+                </div>
+                <div>
+                    <label class="block text-xs text-zinc-400 mb-1.5">ボタンカラーを選択</label>
+                    <div id="colorPickerGrid" class="grid grid-cols-4 gap-1.5">
+                        <!-- JavaScriptでカラー選択ボタンを生成 -->
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2 justify-end pt-1">
+                <button onclick="closeEditLabelModal()" class="btn-press flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2.5 rounded-xl text-xs">
+                    キャンセル
+                </button>
+                <button id="saveModalBtn" onclick="saveEditedLabel()" class="btn-press flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-indigo-600/30">
+                    保存する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 項目削除確認モーダル -->
+    <div id="deleteItemModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-xs w-full p-4 shadow-2xl space-y-4">
+            <div class="flex items-center gap-2.5 text-rose-400">
+                <div class="w-9 h-9 rounded-full bg-rose-950 border border-rose-800 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-white">カウンター項目の削除</h3>
+                    <p id="deleteTargetName" class="text-[11px] text-rose-300 font-bold truncate max-w-[190px]"></p>
+                </div>
+            </div>
+            <p class="text-xs text-zinc-300 leading-relaxed bg-zinc-950/80 p-3 rounded-xl border border-zinc-800">
+                このカウンター項目を削除しますか？現在のカウント数も消去されます。
+            </p>
+            <div class="flex gap-2">
+                <button onclick="closeDeleteItemModal()" class="btn-press flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2.5 rounded-xl text-xs">
+                    キャンセル
+                </button>
+                <button onclick="confirmDeleteCounter()" class="btn-press flex-1 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-rose-600/30">
+                    削除する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- リセット確認モーダル -->
+    <div id="resetModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl max-w-xs w-full p-4 shadow-2xl space-y-4">
+            <div class="flex items-center gap-2.5 text-rose-400">
+                <div class="w-9 h-9 rounded-full bg-rose-950 border border-rose-800 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation text-base"></i>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-white">データの初期化</h3>
+                    <p class="text-[11px] text-zinc-400">リセット方法を選択してください</p>
+                </div>
+            </div>
+            <p class="text-xs text-zinc-300 leading-relaxed bg-zinc-950/80 p-3 rounded-xl border border-zinc-800">
+                カスタムした項目名・色・構成を残したままカウント数のみ0に戻すか、項目名も含めて初期状態に戻すか選べます。
+            </p>
+            <div class="space-y-2">
+                <button onclick="confirmResetCountsOnly()" class="btn-press w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-rose-600/30">
+                    項目名は残してカウント・G数のみ0にする
+                </button>
+                <button onclick="confirmResetEverything()" class="btn-press w-full bg-zinc-950 hover:bg-zinc-800 text-rose-300 border border-rose-900/60 font-semibold py-2.5 rounded-xl text-xs">
+                    項目名・構成も含めて初期状態に戻す
+                </button>
+                <button onclick="closeResetModal()" class="btn-press w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold py-2 rounded-xl text-xs">
+                    キャンセル
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知 -->
+    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform translate-y-2">
+        <div class="bg-indigo-600 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl border border-indigo-400/40 flex items-center gap-2 whitespace-nowrap">
+            <i class="fa-solid fa-circle-check"></i>
+            <span id="toastMessage">クリップボードにコピーしました</span>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * 1. 定数・カラーテーマ・プリセット定義
+         */
+        const STORAGE_KEY = 'slot_kachikachi_pro_v2';
+        const CUSTOM_PRESETS_STORAGE_KEY = 'slot_kachikachi_custom_presets_v1';
+
+        // カチカチくん風の8色テーマ定義（追加項目にも対応）
+        const COUNTER_THEMES = [
+            {
+                id: 0,
+                colorName: '黄',
+                badgeBg: 'bg-amber-400',
+                cardBorder: 'border-amber-500/30',
+                headerText: 'text-amber-300',
+                plusBtn: 'bg-gradient-to-b from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-zinc-950 shadow-lg shadow-amber-500/20 border-t border-amber-200/60',
+                chipActive: 'bg-amber-500 text-zinc-950 border-amber-400 font-extrabold',
+            },
+            {
+                id: 1,
+                colorName: '赤',
+                badgeBg: 'bg-rose-500',
+                cardBorder: 'border-rose-500/30',
+                headerText: 'text-rose-300',
+                plusBtn: 'bg-gradient-to-b from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white shadow-lg shadow-rose-500/25 border-t border-rose-300/40',
+                chipActive: 'bg-rose-500 text-white border-rose-400 font-extrabold',
+            },
+            {
+                id: 2,
+                colorName: '桃',
+                badgeBg: 'bg-pink-500',
+                cardBorder: 'border-pink-500/30',
+                headerText: 'text-pink-300',
+                plusBtn: 'bg-gradient-to-b from-pink-500 to-pink-600 hover:from-pink-400 hover:to-pink-500 text-white shadow-lg shadow-pink-500/25 border-t border-pink-300/40',
+                chipActive: 'bg-pink-500 text-white border-pink-400 font-extrabold',
+            },
+            {
+                id: 3,
+                colorName: '青',
+                badgeBg: 'bg-sky-500',
+                cardBorder: 'border-sky-500/30',
+                headerText: 'text-sky-300',
+                plusBtn: 'bg-gradient-to-b from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-lg shadow-sky-500/25 border-t border-sky-300/40',
+                chipActive: 'bg-sky-500 text-white border-sky-400 font-extrabold',
+            },
+            {
+                id: 4,
+                colorName: '緑',
+                badgeBg: 'bg-emerald-500',
+                cardBorder: 'border-emerald-500/30',
+                headerText: 'text-emerald-300',
+                plusBtn: 'bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-zinc-950 shadow-lg shadow-emerald-500/20 border-t border-emerald-200/50',
+                chipActive: 'bg-emerald-500 text-zinc-950 border-emerald-400 font-extrabold',
+            },
+            {
+                id: 5,
+                colorName: '紫',
+                badgeBg: 'bg-purple-500',
+                cardBorder: 'border-purple-500/30',
+                headerText: 'text-purple-300',
+                plusBtn: 'bg-gradient-to-b from-purple-500 to-purple-600 hover:from-purple-400 hover:to-purple-500 text-white shadow-lg shadow-purple-500/25 border-t border-purple-300/40',
+                chipActive: 'bg-purple-500 text-white border-purple-400 font-extrabold',
+            },
+            {
+                id: 6,
+                colorName: '橙',
+                badgeBg: 'bg-orange-500',
+                cardBorder: 'border-orange-500/30',
+                headerText: 'text-orange-300',
+                plusBtn: 'bg-gradient-to-b from-orange-400 to-orange-600 hover:from-orange-300 hover:to-orange-500 text-zinc-950 shadow-lg shadow-orange-500/25 border-t border-orange-200/50',
+                chipActive: 'bg-orange-500 text-zinc-950 border-orange-400 font-extrabold',
+            },
+            {
+                id: 7,
+                colorName: '白/水',
+                badgeBg: 'bg-cyan-300',
+                cardBorder: 'border-cyan-400/30',
+                headerText: 'text-cyan-200',
+                plusBtn: 'bg-gradient-to-b from-cyan-200 to-cyan-400 hover:from-cyan-100 hover:to-cyan-300 text-zinc-950 shadow-lg shadow-cyan-400/20 border-t border-white/70',
+                chipActive: 'bg-cyan-300 text-zinc-950 border-cyan-200 font-extrabold',
+            }
+        ];
+
+        // 機種別プリセット設定
+        const PRESETS = {
+            juggler: {
+                name: 'ジャグラー系',
+                items: [
+                    { label: 'ぶどう', themeIndex: 0 },
+                    { label: '単独BIG', themeIndex: 1 },
+                    { label: 'チェリーBIG', themeIndex: 2 },
+                    { label: '単独REG', themeIndex: 3 },
+                    { label: 'チェリーREG', themeIndex: 4 },
+                    { label: 'チェリー/他', themeIndex: 5 }
+                ],
+                combos: [
+                    { title: '合算A (REG合算など)', targets: [3, 4] },
+                    { title: '合算B (ボーナス合算など)', targets: [1, 2, 3, 4] }
+                ]
+            },
+            at_smaslo: {
+                name: 'スマスロ汎用',
+                items: [
+                    { label: '共通ベル', themeIndex: 0 },
+                    { label: '弱チェリー', themeIndex: 1 },
+                    { label: 'スイカ', themeIndex: 4 },
+                    { label: 'CZ当選', themeIndex: 3 },
+                    { label: '直撃AT/特化', themeIndex: 2 },
+                    { label: '示唆/その他', themeIndex: 5 }
+                ],
+                combos: [
+                    { title: '合算A (レア役合算など)', targets: [1, 2] },
+                    { title: '合算B (初当たり合算など)', targets: [3, 4] }
+                ]
+            },
+            atype: {
+                name: 'Aタイプ汎用',
+                items: [
+                    { label: 'ベル/メイン', themeIndex: 0 },
+                    { label: '氷/スイカ', themeIndex: 4 },
+                    { label: 'チェリー', themeIndex: 1 },
+                    { label: 'BIGボーナス', themeIndex: 2 },
+                    { label: 'REGボーナス', themeIndex: 3 },
+                    { label: 'RT中ハズレ', themeIndex: 5 }
+                ],
+                combos: [
+                    { title: '合算A (小役合算など)', targets: [0, 1, 2] },
+                    { title: '合算B (ボーナス合算など)', targets: [3, 4] }
+                ]
+            }
+        };
+
+        /**
+         * 2. アプリケーション状態 (State)
+         */
+        let appState = {
+            presetKey: 'juggler',
+            startGames: 0,
+            currentGames: 0,
+            counters: [
+                { id: 0, label: 'ぶどう', count: 0, themeIndex: 0 },
+                { id: 1, label: '単独BIG', count: 0, themeIndex: 1 },
+                { id: 2, label: 'チェリーBIG', count: 0, themeIndex: 2 },
+                { id: 3, label: '単独REG', count: 0, themeIndex: 3 },
+                { id: 4, label: 'チェリーREG', count: 0, themeIndex: 4 },
+                { id: 5, label: 'チェリー/他', count: 0, themeIndex: 5 }
+            ],
+            combos: [
+                { title: '合算A (REG合算など)', targets: [3, 4] },
+                { title: '合算B (ボーナス合算など)', targets: [1, 2, 3, 4] }
+            ]
+        };
+
+        // ユーザーが保存したマイプリセット一覧
+        let customPresets = [];
+
+        let editingCounterId = null; // null の場合は新規追加モード、数値の場合は該当インデックスの編集モード
+        let selectedModalThemeIndex = 0;
+        let deletingCounterIndex = null;
+        let pendingPresetKey = null; // プリセット切替確認用の一時保持キー
+        let toastTimeout = null;
+
+        /**
+         * 3. 初期化＆ローカルストレージ連携
+         */
+        function initApp() {
+            loadCustomPresetsFromStorage();
+            loadStateFromStorage();
+            renderAll();
+        }
+
+        function saveStateToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+                flashAutoSaveBadge();
+            } catch (e) {
+                console.warn('localStorageへの保存に失敗しました:', e);
+            }
+        }
+
+        function saveCustomPresetsToStorage() {
+            try {
+                localStorage.setItem(CUSTOM_PRESETS_STORAGE_KEY, JSON.stringify(customPresets));
+                flashAutoSaveBadge();
+            } catch (e) {
+                console.warn('マイプリセットの保存に失敗しました:', e);
+            }
+        }
+
+        function loadCustomPresetsFromStorage() {
+            try {
+                const raw = localStorage.getItem(CUSTOM_PRESETS_STORAGE_KEY);
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    customPresets = parsed.filter(p => p && p.id && p.name && Array.isArray(p.items));
+                }
+            } catch (e) {
+                console.warn('マイプリセットの読み込みに失敗しました:', e);
+            }
+        }
+
+        function flashAutoSaveBadge() {
+            const badge = document.getElementById('autoSaveBadge');
+            if (!badge) return;
+            badge.classList.remove('opacity-60');
+            badge.classList.add('opacity-100');
+        }
+
+        function loadStateFromStorage() {
+            try {
+                // 新バージョンのキーまたは旧バージョンのキーから復元
+                const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('slot_kachikachi_pro_v1');
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (parsed && Array.isArray(parsed.counters) && parsed.counters.length >= 1) {
+                    appState = {
+                        presetKey: parsed.presetKey || 'juggler',
+                        startGames: Number(parsed.startGames) || 0,
+                        currentGames: Number(parsed.currentGames) || 0,
+                        counters: parsed.counters.map((c, idx) => ({
+                            id: idx,
+                            label: c.label || `項目${idx + 1}`,
+                            count: Number(c.count) || 0,
+                            themeIndex: typeof c.themeIndex === 'number' ? c.themeIndex : (idx % COUNTER_THEMES.length)
+                        })),
+                        combos: Array.isArray(parsed.combos) && parsed.combos.length === 2
+                            ? parsed.combos
+                            : JSON.parse(JSON.stringify(PRESETS.juggler.combos))
+                    };
+                }
+            } catch (e) {
+                console.warn('localStorageからの読み込みに失敗しました:', e);
+            }
+        }
+
+        function getCounterTheme(counter, index) {
+            const tIdx = typeof counter.themeIndex === 'number'
+                ? counter.themeIndex % COUNTER_THEMES.length
+                : index % COUNTER_THEMES.length;
+            return COUNTER_THEMES[tIdx];
+        }
+
+        /**
+         * 4. 計算ヘルパー関数
+         */
+        function getTotalGames() {
+            const diff = (Number(appState.currentGames) || 0) - (Number(appState.startGames) || 0);
+            return diff > 0 ? diff : 0;
+        }
+
+        function formatProbability(count, totalGames) {
+            if (!count || count <= 0 || totalGames <= 0) {
+                return '1/---';
+            }
+            const denom = (totalGames / count).toFixed(1);
+            return `1/${denom}`;
+        }
+
+        /**
+         * 5. 描画関数 (DOM更新)
+         */
+        function renderAll() {
+            renderPresetChips();
+
+            // ゲーム数入力欄の同期
+            const startInput = document.getElementById('startGames');
+            const currentInput = document.getElementById('currentGames');
+            if (document.activeElement !== startInput) {
+                startInput.value = appState.startGames;
+            }
+            if (document.activeElement !== currentInput) {
+                currentInput.value = appState.currentGames;
+            }
+
+            // 項目数バッジ更新
+            const countBadge = document.getElementById('counterCountBadge');
+            if (countBadge) {
+                countBadge.textContent = `${appState.counters.length}項目`;
+            }
+
+            updateGameSummaryDisplay();
+            renderCounterGrid();
+            renderCombinedMonitors();
+        }
+
+        // 上部のプリセット＆マイプリセット選択チップを描画
+        function renderPresetChips() {
+            const container = document.getElementById('presetChipsContainer');
+            const countBadge = document.getElementById('customPresetCountBadge');
+            if (countBadge) {
+                countBadge.textContent = customPresets.length;
+            }
+            if (!container) return;
+
+            const chips = [];
+
+            // 1. ユーザー保存済みのマイプリセットを先頭に表示（すぐ呼び出せるように）
+            customPresets.forEach(cp => {
+                const isActive = appState.presetKey === cp.id;
+                const style = isActive
+                    ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30 font-extrabold'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-indigo-300 border-indigo-900/60 font-semibold';
+                chips.push(`
+                    <button onclick="requestPresetSwitch('${cp.id}')"
+                        class="btn-press shrink-0 text-xs px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 ${style}">
+                        <i class="fa-solid fa-star text-[10px] ${isActive ? 'text-amber-300' : 'text-indigo-400'}"></i>
+                        <span>${escapeHtml(cp.name)}</span>
+                        <span class="text-[10px] opacity-75 font-mono">(${cp.items.length})</span>
+                    </button>
+                `);
+            });
+
+            // 2. 標準プリセット3種
+            Object.keys(PRESETS).forEach(key => {
+                const p = PRESETS[key];
+                const isActive = appState.presetKey === key;
+                const style = isActive
+                    ? 'bg-zinc-200 text-zinc-950 border-white font-extrabold shadow-sm'
+                    : 'bg-zinc-950 hover:bg-zinc-800 text-zinc-300 border-zinc-800 font-semibold';
+                chips.push(`
+                    <button onclick="requestPresetSwitch('${key}')"
+                        class="btn-press shrink-0 text-xs px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 ${style}">
+                        <span>${escapeHtml(p.name)}</span>
+                    </button>
+                `);
+            });
+
+            // 3. 未保存のカスタム編集中バッジ
+            if (appState.presetKey === 'custom') {
+                chips.unshift(`
+                    <button onclick="openSavePresetModal()"
+                        class="btn-press shrink-0 text-xs px-3 py-1.5 rounded-xl border border-amber-500/60 bg-amber-950/60 text-amber-300 font-extrabold flex items-center gap-1.5">
+                        <i class="fa-solid fa-pen-nib text-[10px]"></i>
+                        <span>カスタム編集中（タップで名前保存）</span>
+                    </button>
+                `);
+            }
+
+            container.innerHTML = chips.join('');
+        }
+
+        function updateGameSummaryDisplay() {
+            const total = getTotalGames();
+            const totalEl = document.getElementById('totalGamesDisplay');
+            const hintEl = document.getElementById('gameErrorHint');
+
+            totalEl.textContent = total.toLocaleString();
+
+            // 現在Gが打ち始めGより小さい場合のみ注意ヒントを表示
+            if (appState.currentGames > 0 && appState.currentGames < appState.startGames) {
+                hintEl.classList.remove('hidden');
+            } else {
+                hintEl.classList.add('hidden');
+            }
+        }
+
+        function renderCounterGrid() {
+            const grid = document.getElementById('counterGrid');
+            const totalGames = getTotalGames();
+            const canDelete = appState.counters.length > 1;
+
+            grid.innerHTML = appState.counters.map((counter, idx) => {
+                const theme = getCounterTheme(counter, idx);
+                const probText = formatProbability(counter.count, totalGames);
+
+                return `
+                <div class="bg-zinc-900/95 border ${theme.cardBorder} rounded-2xl p-3 flex flex-col justify-between shadow-lg relative overflow-hidden">
+                    <!-- 上段：色ドット＋ラベル名（タップで編集）＆削除ボタン -->
+                    <div class="flex items-center justify-between gap-1 mb-1.5">
+                        <button onclick="openEditLabelModal(${idx})" class="group flex items-center gap-1.5 text-left truncate max-w-full py-0.5 focus:outline-none" title="タップして名前や色を変更">
+                            <span class="w-2.5 h-2.5 rounded-full ${theme.badgeBg} shrink-0"></span>
+                            <span class="text-xs font-extrabold ${theme.headerText} truncate group-hover:underline">${escapeHtml(counter.label)}</span>
+                            <i class="fa-solid fa-pen text-[9px] text-zinc-500 group-hover:text-zinc-300 shrink-0"></i>
+                        </button>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <span class="text-[10px] font-mono text-zinc-500">#${idx + 1}</span>
+                            ${canDelete ? `
+                            <button onclick="requestDeleteCounter(${idx})" title="この項目を削除" aria-label="${escapeHtml(counter.label)}を削除"
+                                class="text-zinc-600 hover:text-rose-400 active:text-rose-300 p-1 -mr-1 rounded-lg transition-colors">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- 中段：カウント数 & 出現確率 -->
+                    <div class="bg-zinc-950/90 border border-zinc-800/80 rounded-xl px-2.5 py-2 mb-2.5 flex items-baseline justify-between">
+                        <div>
+                            <div class="text-[10px] text-zinc-500 font-semibold leading-none mb-1">COUNT</div>
+                            <div id="countVal-${idx}" class="font-mono text-2xl font-extrabold text-white leading-none tracking-tight">
+                                ${counter.count}
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-[10px] text-zinc-500 font-semibold leading-none mb-1">PROB</div>
+                            <div id="probVal-${idx}" class="font-mono text-sm font-bold ${counter.count > 0 && totalGames > 0 ? 'text-indigo-300' : 'text-zinc-500'} leading-none">
+                                ${probText}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 下段：−（小）と ＋（特大）ボタン -->
+                    <div class="grid grid-cols-4 gap-2 items-stretch">
+                        <button onclick="incrementCounter(${idx}, -1)" aria-label="${escapeHtml(counter.label)}をマイナス1"
+                            class="btn-press col-span-1 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-600 text-zinc-300 border border-zinc-700 rounded-xl flex items-center justify-center py-3.5 text-sm font-bold shadow">
+                            <i class="fa-solid fa-minus"></i>
+                        </button>
+                        <button onclick="incrementCounter(${idx}, 1)" aria-label="${escapeHtml(counter.label)}をプラス1"
+                            class="btn-press col-span-3 ${theme.plusBtn} rounded-xl flex items-center justify-center py-3.5 text-lg font-extrabold tracking-wider">
+                            <i class="fa-solid fa-plus mr-1 text-base"></i>1
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function renderCombinedMonitors() {
+            const container = document.getElementById('combinedContainer');
+            const totalGames = getTotalGames();
+
+            container.innerHTML = appState.combos.map((combo, comboIdx) => {
+                // 存在するインデックスのみを有効対象とする
+                const validTargets = combo.targets.filter(tIdx => tIdx >= 0 && tIdx < appState.counters.length);
+                const sumCount = validTargets.reduce((acc, targetId) => {
+                    const c = appState.counters[targetId];
+                    return acc + (c ? c.count : 0);
+                }, 0);
+
+                const probText = formatProbability(sumCount, totalGames);
+
+                // 全カウンター項目のトグルチップを生成（追加項目も自動反映）
+                const chipsHtml = appState.counters.map((counter, cIdx) => {
+                    const theme = getCounterTheme(counter, cIdx);
+                    const isSelected = validTargets.includes(cIdx);
+                    const chipStyle = isSelected
+                        ? theme.chipActive
+                        : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700';
+
+                    return `
+                        <button onclick="toggleComboTarget(${comboIdx}, ${cIdx})"
+                            class="btn-press text-[11px] px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 truncate ${chipStyle}">
+                            <span class="w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-current' : theme.badgeBg} shrink-0"></span>
+                            <span class="truncate">${escapeHtml(counter.label)}</span>
+                        </button>
+                    `;
+                }).join('');
+
+                return `
+                <div class="bg-zinc-950/90 border border-zinc-800/90 rounded-xl p-2.5 space-y-2">
+                    <div class="flex items-center justify-between border-b border-zinc-800/80 pb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold text-zinc-200">${escapeHtml(combo.title)}</span>
+                        </div>
+                        <div class="flex items-baseline gap-2.5">
+                            <span class="text-xs font-mono text-zinc-400">計 <strong class="text-white font-bold">${sumCount}</strong> 回</span>
+                            <span class="font-mono text-base font-extrabold ${sumCount > 0 && totalGames > 0 ? 'text-amber-300' : 'text-zinc-500'}">${probText}</span>
+                        </div>
+                    </div>
+                    <!-- 対象選択チップ群 -->
+                    <div class="grid grid-cols-3 gap-1.5">
+                        ${chipsHtml}
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * 6. インタラクション・イベントハンドラ
+         */
+        // ゲーム数直接入力時
+        function handleGameInput() {
+            const startVal = parseInt(document.getElementById('startGames').value, 10);
+            const currentVal = parseInt(document.getElementById('currentGames').value, 10);
+
+            appState.startGames = isNaN(startVal) || startVal < 0 ? 0 : startVal;
+            appState.currentGames = isNaN(currentVal) || currentVal < 0 ? 0 : currentVal;
+
+            saveStateToStorage();
+            updateGameSummaryDisplay();
+            updateProbabilitiesOnly();
+            renderCombinedMonitors();
+        }
+
+        // クイック加算・減算ボタン
+        function adjustCurrentGames(delta) {
+            let base = Number(appState.currentGames) || 0;
+            if (base === 0 && appState.startGames > 0 && delta > 0) {
+                base = Number(appState.startGames);
+            }
+            const nextVal = Math.max(0, base + delta);
+            appState.currentGames = nextVal;
+            document.getElementById('currentGames').value = nextVal;
+
+            saveStateToStorage();
+            updateGameSummaryDisplay();
+            updateProbabilitiesOnly();
+            renderCombinedMonitors();
+        }
+
+        // カウンター増減
+        function incrementCounter(index, delta) {
+            const target = appState.counters[index];
+            if (!target) return;
+
+            const nextCount = Math.max(0, target.count + delta);
+            if (nextCount === target.count) return;
+
+            target.count = nextCount;
+            saveStateToStorage();
+
+            // 数値と確率の高速部分更新＋ポップアニメーション
+            const countEl = document.getElementById(`countVal-${index}`);
+            const probEl = document.getElementById(`probVal-${index}`);
+            const totalGames = getTotalGames();
+
+            if (countEl) {
+                countEl.textContent = target.count;
+                countEl.classList.remove('animate-pop');
+                void countEl.offsetWidth;
+                countEl.classList.add('animate-pop');
+            }
+            if (probEl) {
+                probEl.textContent = formatProbability(target.count, totalGames);
+                probEl.className = `font-mono text-sm font-bold leading-none ${target.count > 0 && totalGames > 0 ? 'text-indigo-300' : 'text-zinc-500'}`;
+            }
+
+            renderCombinedMonitors();
+        }
+
+        // ゲーム数変更時に全カウンターの確率表示だけを更新
+        function updateProbabilitiesOnly() {
+            const totalGames = getTotalGames();
+            appState.counters.forEach((counter, idx) => {
+                const probEl = document.getElementById(`probVal-${idx}`);
+                if (probEl) {
+                    probEl.textContent = formatProbability(counter.count, totalGames);
+                    probEl.className = `font-mono text-sm font-bold leading-none ${counter.count > 0 && totalGames > 0 ? 'text-indigo-300' : 'text-zinc-500'}`;
+                }
+            });
+        }
+
+        // 合算対象のON/OFF切り替え
+        function toggleComboTarget(comboIdx, counterIdx) {
+            const combo = appState.combos[comboIdx];
+            if (!combo) return;
+
+            const pos = combo.targets.indexOf(counterIdx);
+            if (pos >= 0) {
+                combo.targets.splice(pos, 1);
+            } else {
+                combo.targets.push(counterIdx);
+                combo.targets.sort((a, b) => a - b);
+            }
+
+            // マイプリセット選択中に合算対象を変更した場合はそのマイプリセットにも即座に自動同期
+            syncActiveCustomPresetIfSelected();
+            saveStateToStorage();
+            renderCombinedMonitors();
+        }
+
+        // 現在カウント中のデータがあるか判定
+        function hasActiveCountsOrGames() {
+            const hasCount = appState.counters.some(c => c.count > 0);
+            const hasGames = getTotalGames() > 0;
+            return hasCount || hasGames;
+        }
+
+        // プリセット切替リクエスト（カウントがある場合は確認モーダルを表示）
+        function requestPresetSwitch(presetKey) {
+            if (appState.presetKey === presetKey) {
+                showToast('現在選択中のプリセットです');
+                return;
+            }
+            if (hasActiveCountsOrGames()) {
+                pendingPresetKey = presetKey;
+                const targetObj = getPresetObjectByKey(presetKey);
+                document.getElementById('switchPresetTargetName').textContent = targetObj ? `切り替え先: ${targetObj.name}` : '';
+                const modal = document.getElementById('switchPresetModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                applyPresetByKey(presetKey, true);
+            }
+        }
+
+        function closeSwitchPresetModal() {
+            pendingPresetKey = null;
+            const modal = document.getElementById('switchPresetModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmPresetSwitch(keepCounts) {
+            if (pendingPresetKey) {
+                applyPresetByKey(pendingPresetKey, keepCounts);
+            }
+            closeSwitchPresetModal();
+        }
+
+        function getPresetObjectByKey(presetKey) {
+            if (PRESETS[presetKey]) {
+                return PRESETS[presetKey];
+            }
+            return customPresets.find(cp => cp.id === presetKey) || null;
+        }
+
+        // プリセット（標準またはマイプリセット）を適用
+        function applyPresetByKey(presetKey, keepCounts = true) {
+            const preset = getPresetObjectByKey(presetKey);
+            if (!preset) return;
+
+            appState.presetKey = presetKey;
+
+            if (!keepCounts) {
+                appState.startGames = 0;
+                appState.currentGames = 0;
+            }
+
+            // 項目の構築（回数維持モードの場合は同じ順番のカウントを引き継ぐ）
+            const newCounters = preset.items.map((item, idx) => {
+                const prevCount = keepCounts && appState.counters[idx] ? appState.counters[idx].count : 0;
+                return {
+                    id: idx,
+                    label: item.label || `項目${idx + 1}`,
+                    count: prevCount,
+                    themeIndex: typeof item.themeIndex === 'number' ? item.themeIndex : (idx % COUNTER_THEMES.length)
+                };
+            });
+
+            appState.counters = newCounters;
+
+            if (Array.isArray(preset.combos) && preset.combos.length === 2) {
+                appState.combos = JSON.parse(JSON.stringify(preset.combos));
+            }
+
+            saveStateToStorage();
+            renderAll();
+            showToast(`「${preset.name}」を読み込みました`);
+        }
+
+        // マイプリセット選択中にラベル名や色を編集した際、自動的にマイプリセット側も更新する
+        function syncActiveCustomPresetIfSelected() {
+            const activeCustom = customPresets.find(cp => cp.id === appState.presetKey);
+            if (activeCustom) {
+                activeCustom.items = appState.counters.map(c => ({
+                    label: c.label,
+                    themeIndex: c.themeIndex
+                }));
+                activeCustom.combos = JSON.parse(JSON.stringify(appState.combos));
+                saveCustomPresetsToStorage();
+            }
+        }
+
+        /**
+         * 6-B. マイプリセット保存・管理モーダル制御
+         */
+        function openSavePresetModal() {
+            const modal = document.getElementById('savePresetModal');
+            const nameInput = document.getElementById('presetNameInput');
+            const previewEl = document.getElementById('savePresetPreviewText');
+            const overwriteWrap = document.getElementById('overwritePresetOption');
+            const overwriteCheck = document.getElementById('overwritePresetCheckbox');
+            const overwriteLabel = document.getElementById('overwritePresetLabelText');
+
+            // 現在の項目一覧プレビュー
+            const itemNames = appState.counters.map(c => c.label).join(' / ');
+            previewEl.textContent = `全${appState.counters.length}項目: ${itemNames}`;
+
+            // 現在マイプリセットを選択中の場合は上書きオプションを表示
+            const currentCustom = customPresets.find(cp => cp.id === appState.presetKey);
+            if (currentCustom) {
+                nameInput.value = currentCustom.name;
+                overwriteWrap.classList.remove('hidden');
+                overwriteCheck.checked = true;
+                overwriteLabel.textContent = `「${currentCustom.name}」を上書き保存する`;
+            } else {
+                nameInput.value = '';
+                overwriteWrap.classList.add('hidden');
+                overwriteCheck.checked = false;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            setTimeout(() => {
+                nameInput.focus();
+                nameInput.select();
+            }, 50);
+        }
+
+        function closeSavePresetModal() {
+            const modal = document.getElementById('savePresetModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveCurrentAsCustomPreset() {
+            const nameInput = document.getElementById('presetNameInput');
+            const overwriteCheck = document.getElementById('overwritePresetCheckbox');
+            const rawName = nameInput.value.trim();
+            const presetName = rawName || `マイプリセット ${customPresets.length + 1}`;
+
+            const itemsSnapshot = appState.counters.map(c => ({
+                label: c.label,
+                themeIndex: c.themeIndex
+            }));
+            const combosSnapshot = JSON.parse(JSON.stringify(appState.combos));
+
+            const currentCustom = customPresets.find(cp => cp.id === appState.presetKey);
+
+            if (currentCustom && overwriteCheck.checked) {
+                // 既存のマイプリセットを上書き
+                currentCustom.name = presetName;
+                currentCustom.items = itemsSnapshot;
+                currentCustom.combos = combosSnapshot;
+                currentCustom.updatedAt = Date.now();
+                saveCustomPresetsToStorage();
+                saveStateToStorage();
+                renderAll();
+                closeSavePresetModal();
+                showToast(`「${presetName}」を上書き保存しました！`);
+            } else {
+                // 新規マイプリセットとして追加
+                const newId = 'custom_' + Date.now();
+                const newPreset = {
+                    id: newId,
+                    name: presetName,
+                    items: itemsSnapshot,
+                    combos: combosSnapshot,
+                    updatedAt: Date.now()
+                };
+                customPresets.unshift(newPreset);
+                appState.presetKey = newId;
+                saveCustomPresetsToStorage();
+                saveStateToStorage();
+                renderAll();
+                closeSavePresetModal();
+                showToast(`マイプリセット「${presetName}」を保存しました！`);
+            }
+        }
+
+        document.getElementById('presetNameInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                saveCurrentAsCustomPreset();
+            }
+        });
+
+        // マイプリセット管理モーダルを開く
+        function openPresetManageModal() {
+            renderCustomPresetsManageList();
+            const modal = document.getElementById('managePresetsModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePresetManageModal() {
+            const modal = document.getElementById('managePresetsModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function renderCustomPresetsManageList() {
+            const container = document.getElementById('customPresetsListContainer');
+            if (!container) return;
+
+            if (customPresets.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 px-4 bg-zinc-950/80 border border-zinc-800 rounded-xl space-y-2">
+                        <i class="fa-regular fa-bookmark text-2xl text-zinc-600"></i>
+                        <p class="text-xs font-bold text-zinc-300">保存されたマイプリセットはありません</p>
+                        <p class="text-[11px] text-zinc-500">カウンター項目を自分好みに編集して「＋ 現在の項目構成を保存」から登録できます。</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = customPresets.map((cp, idx) => {
+                const isSelected = appState.presetKey === cp.id;
+                const itemTags = cp.items.map(item => {
+                    const theme = COUNTER_THEMES[item.themeIndex % COUNTER_THEMES.length] || COUNTER_THEMES[0];
+                    return `<span class="inline-flex items-center gap-1 text-[10px] bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-300">
+                        <span class="w-1.5 h-1.5 rounded-full ${theme.badgeBg}"></span>${escapeHtml(item.label)}
+                    </span>`;
+                }).join('');
+
+                return `
+                    <div class="bg-zinc-950 border ${isSelected ? 'border-indigo-500/70' : 'border-zinc-800'} rounded-xl p-3 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <i class="fa-solid fa-star text-xs ${isSelected ? 'text-amber-400' : 'text-indigo-400'} shrink-0"></i>
+                                <input type="text" value="${escapeHtml(cp.name)}" maxlength="24"
+                                    onchange="renameCustomPreset('${cp.id}', this.value)"
+                                    class="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-indigo-500 text-xs font-extrabold text-white focus:outline-none truncate w-full"
+                                    title="タップしてプリセット名を変更">
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="closePresetManageModal(); requestPresetSwitch('${cp.id}');"
+                                    class="btn-press ${isSelected ? 'bg-indigo-600/30 text-indigo-200 border border-indigo-500/40' : 'bg-indigo-600 hover:bg-indigo-500 text-white'} text-[11px] font-bold px-2.5 py-1 rounded-lg">
+                                    ${isSelected ? '選択中' : '読込'}
+                                </button>
+                                <button onclick="deleteCustomPreset('${cp.id}')" title="削除"
+                                    class="btn-press bg-zinc-900 hover:bg-rose-950 text-zinc-400 hover:text-rose-400 border border-zinc-800 px-2 py-1 rounded-lg text-xs">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-1">
+                            ${itemTags}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renameCustomPreset(presetId, newName) {
+            const trimmed = newName.trim();
+            if (!trimmed) return;
+            const target = customPresets.find(cp => cp.id === presetId);
+            if (target) {
+                target.name = trimmed;
+                saveCustomPresetsToStorage();
+                renderPresetChips();
+                showToast(`プリセット名を「${trimmed}」に変更しました`);
+            }
+        }
+
+        function deleteCustomPreset(presetId) {
+            const idx = customPresets.findIndex(cp => cp.id === presetId);
+            if (idx === -1) return;
+            const removed = customPresets.splice(idx, 1)[0];
+            if (appState.presetKey === presetId) {
+                appState.presetKey = 'custom';
+            }
+            saveCustomPresetsToStorage();
+            saveStateToStorage();
+            renderCustomPresetsManageList();
+            renderPresetChips();
+            showToast(`「${removed.name}」を削除しました`);
+        }
+
+        /**
+         * 7. ラベル編集＆新規カウンター追加モーダル制御
+         */
+        function renderColorPicker() {
+            const grid = document.getElementById('colorPickerGrid');
+            grid.innerHTML = COUNTER_THEMES.map((theme, tIdx) => {
+                const isSelected = tIdx === selectedModalThemeIndex;
+                return `
+                    <button type="button" onclick="selectModalTheme(${tIdx})"
+                        class="btn-press flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border text-xs font-bold transition-all ${
+                            isSelected
+                                ? 'bg-zinc-800 border-white text-white ring-2 ring-indigo-500/50'
+                                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                        }">
+                        <span class="w-2.5 h-2.5 rounded-full ${theme.badgeBg}"></span>
+                        <span>${theme.colorName}</span>
+                    </button>
+                `;
+            }).join('');
+
+            const dot = document.getElementById('modalColorDot');
+            const activeTheme = COUNTER_THEMES[selectedModalThemeIndex] || COUNTER_THEMES[0];
+            dot.className = `w-3 h-3 rounded-full inline-block ${activeTheme.badgeBg}`;
+        }
+
+        function selectModalTheme(themeIdx) {
+            selectedModalThemeIndex = themeIdx;
+            renderColorPicker();
+        }
+
+        // 既存項目の編集モーダルを開く
+        function openEditLabelModal(counterId) {
+            editingCounterId = counterId;
+            const counter = appState.counters[counterId];
+            selectedModalThemeIndex = typeof counter.themeIndex === 'number'
+                ? counter.themeIndex % COUNTER_THEMES.length
+                : counterId % COUNTER_THEMES.length;
+
+            document.getElementById('editModalTitle').textContent = '項目名・カラーの変更';
+            document.getElementById('saveModalBtn').textContent = '保存する';
+
+            const input = document.getElementById('labelInputField');
+            input.value = counter.label;
+
+            renderColorPicker();
+
+            const modal = document.getElementById('editLabelModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+        }
+
+        // 新規カウンター追加モーダルを開く
+        function openAddCounterModal() {
+            editingCounterId = null; // null = 新規追加モード
+            const nextNum = appState.counters.length + 1;
+            selectedModalThemeIndex = (nextNum - 1) % COUNTER_THEMES.length;
+
+            document.getElementById('editModalTitle').textContent = 'カウンター項目を追加';
+            document.getElementById('saveModalBtn').textContent = '追加する';
+
+            const input = document.getElementById('labelInputField');
+            input.value = `追加項目${nextNum}`;
+
+            renderColorPicker();
+
+            const modal = document.getElementById('editLabelModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+        }
+
+        function closeEditLabelModal() {
+            editingCounterId = null;
+            const modal = document.getElementById('editLabelModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveEditedLabel() {
+            const input = document.getElementById('labelInputField');
+            const newLabel = input.value.trim();
+
+            if (editingCounterId === null) {
+                // 新規追加処理
+                const nextNum = appState.counters.length + 1;
+                const finalLabel = newLabel || `追加項目${nextNum}`;
+                appState.counters.push({
+                    id: Date.now(),
+                    label: finalLabel,
+                    count: 0,
+                    themeIndex: selectedModalThemeIndex
+                });
+                if (PRESETS[appState.presetKey]) {
+                    appState.presetKey = 'custom';
+                } else {
+                    syncActiveCustomPresetIfSelected();
+                }
+                saveStateToStorage();
+                renderAll();
+                showToast(`「${finalLabel}」を追加・自動保存しました`);
+            } else {
+                // 既存項目の更新処理
+                if (newLabel && appState.counters[editingCounterId]) {
+                    appState.counters[editingCounterId].label = newLabel;
+                    appState.counters[editingCounterId].themeIndex = selectedModalThemeIndex;
+                    if (PRESETS[appState.presetKey]) {
+                        appState.presetKey = 'custom';
+                    } else {
+                        syncActiveCustomPresetIfSelected();
+                    }
+                    saveStateToStorage();
+                    renderAll();
+                    showToast(`「${newLabel}」に名前を保存しました`);
+                }
+            }
+            closeEditLabelModal();
+        }
+
+        // Enterキーでラベル保存・追加
+        document.getElementById('labelInputField').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                saveEditedLabel();
+            }
+        });
+
+        /**
+         * 7-B. カウンター項目の削除制御
+         */
+        function requestDeleteCounter(index) {
+            if (appState.counters.length <= 1) {
+                showToast('最低1つのカウンターが必要です');
+                return;
+            }
+            const target = appState.counters[index];
+            if (!target) return;
+
+            // カウント数が0の場合は即座に削除、1以上の場合は誤操作防止で確認モーダルを表示
+            if (target.count === 0) {
+                executeDeleteCounter(index);
+            } else {
+                deletingCounterIndex = index;
+                document.getElementById('deleteTargetName').textContent = `「${target.label}」（現在 ${target.count} 回）`;
+                const modal = document.getElementById('deleteItemModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        }
+
+        function closeDeleteItemModal() {
+            deletingCounterIndex = null;
+            const modal = document.getElementById('deleteItemModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmDeleteCounter() {
+            if (deletingCounterIndex !== null) {
+                executeDeleteCounter(deletingCounterIndex);
+            }
+            closeDeleteItemModal();
+        }
+
+        function executeDeleteCounter(index) {
+            const removed = appState.counters.splice(index, 1)[0];
+
+            // 合算モニターの対象インデックスを再計算してズレを防ぐ
+            appState.combos.forEach(combo => {
+                combo.targets = combo.targets
+                    .filter(tIdx => tIdx !== index)
+                    .map(tIdx => (tIdx > index ? tIdx - 1 : tIdx));
+            });
+
+            if (PRESETS[appState.presetKey]) {
+                appState.presetKey = 'custom';
+            } else {
+                syncActiveCustomPresetIfSelected();
+            }
+            saveStateToStorage();
+            renderAll();
+            if (removed) {
+                showToast(`「${removed.label}」を削除しました`);
+            }
+        }
+
+        /**
+         * 8. リセット確認モーダル制御
+         */
+        function openResetModal() {
+            const modal = document.getElementById('resetModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeResetModal() {
+            const modal = document.getElementById('resetModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // カスタム項目名は維持したままカウントとゲーム数のみリセット
+        function confirmResetCountsOnly() {
+            appState.startGames = 0;
+            appState.currentGames = 0;
+            appState.counters.forEach(c => c.count = 0);
+
+            saveStateToStorage();
+            renderAll();
+            closeResetModal();
+            showToast('項目名は維持したままカウントを0に戻しました');
+        }
+
+        // 項目名も含めて現在のプリセットの初期状態にリセット
+        function confirmResetEverything() {
+            appState.startGames = 0;
+            appState.currentGames = 0;
+            const targetKey = PRESETS[appState.presetKey] ? appState.presetKey : 'juggler';
+            applyPresetByKey(targetKey, false);
+            closeResetModal();
+            showToast('初期状態にリセットしました');
+        }
+
+        /**
+         * 9. 集計結果テキストコピー機能
+         */
+        function copyResultsToClipboard() {
+            const totalGames = getTotalGames();
+            const activePresetObj = getPresetObjectByKey(appState.presetKey);
+            const presetName = activePresetObj ? activePresetObj.name : 'カスタム設定';
+
+            const lines = [];
+            lines.push(`【小役カウンター実戦データ】`);
+            lines.push(`■プリセット: ${presetName}`);
+            lines.push(`■ゲーム数: ${totalGames}G (現在:${appState.currentGames}G - 開始:${appState.startGames}G)`);
+            lines.push(`--------------------`);
+
+            appState.counters.forEach((c, idx) => {
+                const prob = formatProbability(c.count, totalGames);
+                lines.push(`・${c.label}: ${c.count}回 (${prob})`);
+            });
+
+            lines.push(`--------------------`);
+            appState.combos.forEach(combo => {
+                if (combo.targets.length > 0) {
+                    const sumCount = combo.targets.reduce((acc, id) => acc + (appState.counters[id]?.count || 0), 0);
+                    const prob = formatProbability(sumCount, totalGames);
+                    const targetNames = combo.targets.map(id => appState.counters[id]?.label).join('+');
+                    lines.push(`★合算 [${targetNames}]: ${sumCount}回 (${prob})`);
+                }
+            });
+
+            const textToCopy = lines.join('\n');
+
+            // iFrameやモバイルブラウザ環境でも確実に動作するコピー処理
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+
+            try {
+                document.execCommand('copy');
+                showToast('集計結果をコピーしました！');
+            } catch (err) {
+                showToast('コピーに失敗しました');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        /**
+         * 10. ユーティリティ関数
+         */
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMessage');
+            msgEl.textContent = message;
+
+            toast.classList.remove('opacity-0', 'translate-y-2');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
+            }, 2200);
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // アプリ起動
+        window.onload = initApp;
+    </script>
+</body>
+</html>
